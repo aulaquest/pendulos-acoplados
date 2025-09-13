@@ -1,1 +1,1088 @@
-ggg
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Péndulos Acoplados</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$', '$$'], ['\\[', '\\]']]
+        }
+      };
+    </script>
+    <script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .control-panel {
+            background-color: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+        }
+        .control-panel::-webkit-scrollbar { width: 6px; }
+        .control-panel::-webkit-scrollbar-track { background: transparent; }
+        .control-panel::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 3px; }
+        
+        .radio-label { position: relative; cursor: pointer; user-select: none; padding-left: 25px; display: inline-flex; align-items: center; height: 24px;}
+        .radio-label input { position: absolute; opacity: 0; cursor: pointer; }
+        .radio-dot { position: absolute; top: 2px; left: 0; height: 20px; width: 20px; background-color: #334155; border: 1px solid #475569; border-radius: 50%; transition: background-color: 0.2s; }
+        .radio-label:hover input ~ .radio-dot { background-color: #475569; }
+        .radio-label input:checked ~ .radio-dot { background-color: #4f46e5; border-color: #4f46e5; }
+        .radio-label input[disabled] ~ .radio-dot { background-color: #1e293b; border-color: #334155; cursor: not-allowed; }
+        .radio-dot:after { content: ""; position: absolute; display: none; top: 5px; left: 5px; width: 10px; height: 10px; border-radius: 50%; background: white; }
+        .radio-label input:checked ~ .radio-dot:after { display: block; }
+        
+        .checkbox-label { position: relative; cursor: pointer; user-select: none; padding-left: 30px; }
+        .checkbox-label input { position: absolute; opacity: 0; cursor: pointer; height: 0; width: 0; }
+        .checkmark { position: absolute; top: 2px; left: 0; height: 20px; width: 20px; background-color: #334155; border: 1px solid #475569; border-radius: 4px; transition: background-color: 0.2s; }
+        .checkbox-label:hover input ~ .checkmark { background-color: #475569; }
+        .checkbox-label input:checked ~ .checkmark { background-color: #4f46e5; }
+        .checkmark:after { content: ""; position: absolute; display: none; left: 6px; top: 2px; width: 5px; height: 10px; border: solid white; border-width: 0 3px 3px 0; transform: rotate(45deg); }
+        .checkbox-label input:checked ~ .checkmark:after { display: block; }
+
+        #popup-overlay, #data-popup-overlay { transition: opacity 0.3s; }
+        #popup-box, #data-popup-box { transition: opacity 0.3s, transform 0.3s; max-height: 80vh; overflow-y: auto; }
+        #popup-box::-webkit-scrollbar, #data-popup-box::-webkit-scrollbar { width: 6px; }
+        #popup-box::-webkit-scrollbar-track, #data-popup-box::-webkit-scrollbar-track { background: #1e293b; }
+        #popup-box::-webkit-scrollbar-thumb, #data-popup-box::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 3px; }
+        #popup-box.hidden, #data-popup-box.hidden { transform: translate(-50%, -50%) scale(0.95); }
+
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 8px;
+            background: #334155; border-radius: 5px; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 20px; height: 20px;
+            background: #a5b4fc; cursor: pointer; border-radius: 50%;
+            border: 2px solid #4f46e5;
+        }
+        #toast-notification {
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        #data-table-container, #large-data-table-container { max-height: 200px; overflow-y: auto; border: 1px solid #334155; border-radius: 6px; }
+        #large-data-table-container { max-height: 50vh; }
+        #data-table-container::-webkit-scrollbar, #large-data-table-container::-webkit-scrollbar { width: 5px; }
+        #data-table-container::-webkit-scrollbar-track, #large-data-table-container::-webkit-scrollbar-track { background: #1e293b; }
+        #data-table-container::-webkit-scrollbar-thumb, #large-data-table-container::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 3px; }
+        #data-table, #large-data-table { width: 100%; text-align: center; }
+        #data-table { font-size: 0.7rem; }
+        #large-data-table { font-size: 0.8rem; }
+        #data-table th, #data-table td, #large-data-table th, #large-data-table td { padding: 4px 2px; }
+        #data-table thead, #large-data-table thead { position: sticky; top: 0; background-color: #1e293b; }
+        .mode-preview-canvas {
+            width: 48px;
+            height: 32px;
+            background-color: rgba(30, 41, 59, 0.5);
+            border-radius: 4px;
+        }
+
+    </style>
+</head>
+<body class="text-gray-300 flex flex-col md:flex-row">
+
+    <!-- Columna de Simulación (60%) -->
+    <div class="w-full md:w-[60%] flex flex-col p-4">
+        <div id="info-hud" class="w-full max-w-4xl mx-auto bg-slate-900/70 backdrop-blur-sm p-3 rounded-lg z-20 border border-slate-700 shadow-lg mb-4 flex justify-around items-center">
+            <div id="pendulum1-hud" class="flex flex-col items-center gap-1 text-xs">
+                <span class="font-bold text-base" style="color: #f87171;">Péndulo 1</span>
+                <span>Ángulo: <span id="angle1-hud" class="font-mono text-white">0.00°</span></span>
+                <span>Velocidad: <span id="vel1-hud" class="font-mono text-white">0.00 m/s</span></span>
+            </div>
+             <div id="pendulum2-hud" class="flex flex-col items-center gap-1 text-xs">
+                <span class="font-bold text-base" style="color: #fb923c;">Péndulo 2</span>
+                <span>Ángulo: <span id="angle2-hud" class="font-mono text-white">0.00°</span></span>
+                <span>Velocidad: <span id="vel2-hud" class="font-mono text-white">0.00 m/s</span></span>
+            </div>
+        </div>
+        <div id="simulation-wrapper" class="relative flex-grow flex flex-col items-center justify-center w-full max-w-4xl mx-auto">
+            <canvas id="simulation-canvas" class="w-full rounded-lg bg-slate-800/20 border border-slate-700"></canvas>
+        </div>
+        <div id="graph-panel" class="w-full max-w-4xl mx-auto mt-4 space-y-4">
+            <div id="position-graph-container" class="bg-slate-900/70 p-3 rounded-lg z-20 border border-slate-700 shadow-lg">
+                <div class="flex justify-between items-center mb-2 flex-wrap">
+                    <h4 class="text-sm font-bold text-sky-400">Ángulo vs. Tiempo</h4>
+                    <div id="graph-checkboxes-container" class="flex gap-x-4 flex-wrap"></div>
+                </div>
+                <canvas id="graph-canvas" class="w-full h-40 rounded bg-slate-800/20"></canvas>
+            </div>
+            <div id="energy-graph-container" class="bg-slate-900/70 p-3 rounded-lg z-20 border border-slate-700 shadow-lg">
+                <div class="flex justify-between items-center mb-2 flex-wrap">
+                    <h4 class="text-sm font-bold text-sky-400">Energía vs. Tiempo</h4>
+                    <div id="energy-graph-checkboxes-container" class="flex gap-x-4 flex-wrap"></div>
+                </div>
+                <canvas id="energy-graph-canvas" class="w-full h-40 rounded bg-slate-800/20"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Popups -->
+    <div id="popup-overlay" class="fixed inset-0 bg-black/50 z-40 hidden opacity-0"></div>
+    <div id="popup-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800 border border-slate-600 rounded-lg p-6 z-50 hidden opacity-0 w-full max-w-2xl text-gray-300">
+        <h3 id="popup-title" class="text-xl font-bold text-sky-400 mb-4">Guía del Simulador de Péndulos Acoplados</h3>
+        <div id="popup-message" class="text-sm space-y-4"></div>
+        <button id="popup-close" class="absolute top-3 right-3 text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+
+    <div id="data-popup-overlay" class="fixed inset-0 bg-black/50 z-40 hidden opacity-0"></div>
+    <div id="data-popup-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800 border border-slate-600 rounded-lg p-6 z-50 hidden opacity-0 w-full max-w-4xl">
+        <h3 class="text-xl font-bold text-sky-400 mb-4">Tabla de Datos Completa</h3>
+        <div id="large-data-table-container">
+            <table id="large-data-table">
+                <thead id="large-data-table-head"></thead>
+                <tbody id="large-data-table-body"></tbody>
+            </table>
+        </div>
+        <div class="flex gap-4 mt-4">
+            <button id="large-export-csv-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-all">Exportar CSV</button>
+            <button id="large-clear-data-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg transition-all">Limpiar Tabla</button>
+        </div>
+        <button id="data-popup-close" class="absolute top-3 right-3 text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    
+    <!-- Panel de Controles (40%) -->
+    <div class="w-full md:w-[40%] control-panel p-5 z-10 border-t md:border-t-0 md:border-l border-slate-800 md:h-screen md:sticky md:top-0 md:overflow-y-auto flex flex-col">
+        <div class="flex justify-start gap-2 pb-4 border-b border-slate-700 mb-4">
+            <button id="info-btn" class="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs rounded-md transition flex-grow">Info y Guía</button>
+            <button id="reset-btn" class="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white font-semibold text-xs rounded-md transition flex-grow">Reiniciar Simulación</button>
+        </div>
+        <div class="space-y-4 flex-grow w-full">
+            <div class="bg-slate-800/50 p-3 rounded-lg space-y-3">
+                <h3 class="text-sm font-bold text-sky-400 mb-2">Control de Tiempo</h3>
+                <p class="text-2xl text-center font-mono font-semibold text-cyan-400" id="time-display">0.00 s</p>
+                <div class="flex items-center justify-center gap-3">
+                    <button id="play-pause-btn" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-md transition w-24">Play</button>
+                    <button id="time-reset-btn" class="px-4 py-1.5 bg-slate-600 hover:bg-slate-700 text-white font-semibold text-xs rounded-md transition">Reiniciar</button>
+                </div>
+                 <div class="flex items-center gap-2 text-xs text-gray-400 pt-2">
+                    <span>Lento</span>
+                    <input type="range" id="time-scale-slider" min="0.1" max="2" step="0.1" value="1" class="w-full">
+                    <span>Rápido</span>
+                </div>
+            </div>
+            <div class="bg-slate-800/50 p-3 rounded-lg space-y-3">
+                 <h3 class="text-sm font-bold text-sky-400 mb-2">Modo de Simulación</h3>
+                 <div class="grid grid-cols-1 gap-3">
+                    <label class="radio-label text-sm flex justify-between items-center"><input type="radio" name="sim-mode" value="real" checked><span>Movimiento Real</span><span class="radio-dot"></span></label>
+                    <label class="radio-label text-sm flex justify-between items-center"><input type="radio" name="sim-mode" value="mode1"><span>Modo 1 (En Fase)</span><canvas id="mode1-preview" class="mode-preview-canvas"></canvas><span class="radio-dot"></span></label>
+                    <label class="radio-label text-sm flex justify-between items-center"><input type="radio" name="sim-mode" value="mode2"><span>Modo 2 (Op. Fase)</span><canvas id="mode2-preview" class="mode-preview-canvas"></canvas><span class="radio-dot"></span></label>
+                 </div>
+                 <div id="modes-info" class="hidden pt-2 border-t border-slate-700 text-center text-xs space-y-1">
+                    <p>Frecuencia Modo 1 ($\omega_1$): <span id="freq1-info" class="font-mono text-cyan-400">0.00</span> rad/s</p>
+                    <p>Frecuencia Modo 2 ($\omega_2$): <span id="freq2-info" class="font-mono text-cyan-400">0.00</span> rad/s</p>
+                 </div>
+            </div>
+            <div class="bg-slate-800/50 p-3 rounded-lg space-y-3">
+                <h3 class="text-sm font-bold text-sky-400">Parámetros del Sistema</h3>
+                 <div><label for="m1-slider" class="text-xs text-gray-400">Masa 1 ($m_1$): <span id="m1-label" class="font-bold text-white">1.0</span> kg</label><input type="range" id="m1-slider" min="0.2" max="5" step="0.1" value="1.0"></div>
+                 <div id="l1-slider-container"><label for="l1-slider" class="text-xs text-gray-400">Longitud 1 ($l_1$): <span id="l1-label" class="font-bold text-white">1.0</span> m</label><input type="range" id="l1-slider" min="0.3" max="1.5" step="0.1" value="1.0"></div>
+                 <hr class="border-slate-600">
+                 <div><label for="m2-slider" class="text-xs text-gray-400">Masa 2 ($m_2$): <span id="m2-label" class="font-bold text-white">1.0</span> kg</label><input type="range" id="m2-slider" min="0.2" max="5" step="0.1" value="1.0"></div>
+                 <div id="l2-slider-container"><label for="l2-slider" class="text-xs text-gray-400">Longitud 2 ($l_2$): <span id="l2-label" class="font-bold text-white">1.0</span> m</label><input type="range" id="l2-slider" min="0.3" max="1.5" step="0.1" value="1.0"></div>
+                 <div id="l-unified-slider-container" class="hidden"><label for="l-unified-slider" class="text-xs text-gray-400">Longitud ($l$): <span id="l-unified-label" class="font-bold text-white">1.0</span> m</label><input type="range" id="l-unified-slider" min="0.3" max="1.5" step="0.1" value="1.0"></div>
+            </div>
+
+            <div class="bg-slate-800/50 p-3 rounded-lg space-y-3">
+                 <h3 class="text-sm font-bold text-sky-400">Parámetros de Acoplamiento y Entorno</h3>
+                 <div><label for="k-slider" class="text-xs text-gray-400">Constante del Muelle (k): <span id="k-label" class="font-bold text-white">5.0</span> N/m</label><input type="range" id="k-slider" min="0" max="20" step="0.5" value="5.0"></div>
+                 <div><label for="g-slider" class="text-xs text-gray-400">Gravedad (g): <span id="g-label" class="font-bold text-white">9.8</span> m/s²</label><input type="range" id="g-slider" min="1" max="25" step="0.1" value="9.8"></div>
+                 <div><label for="damping-slider" class="text-xs text-gray-400">Amortiguamiento: <span id="damping-label" class="font-bold text-white">0.00</span></label><input type="range" id="damping-slider" min="0" max="0.5" step="0.01" value="0"></div>
+            </div>
+
+             <div class="bg-slate-800/50 p-3 rounded-lg space-y-3">
+                <h3 class="text-sm font-bold text-sky-400 mb-2">Registro de Datos</h3>
+                <div class="flex gap-2">
+                    <button id="add-data-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm">Añadir Dato</button>
+                    <button id="view-data-btn" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm">Ver Tabla</button>
+                </div>
+                <div id="data-table-container" class="hidden"><table id="data-table"><thead id="data-table-head"></thead><tbody id="data-table-body"></tbody></table></div>
+            </div>
+            
+        </div>
+        <footer class="p-2 text-center text-xs text-gray-500 z-20 mt-auto pt-4">Simulación creada por <a href="https://aulaquest.com" target="_blank" rel="noopener noreferrer" class="underline hover:text-indigo-400">Aulaquest</a></footer>
+    </div>
+
+    <div id="toast-notification" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-sky-500 text-white px-6 py-3 rounded-lg shadow-lg text-sm z-50 opacity-0">
+        Toast message
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dom = {
+                canvas: document.getElementById('simulation-canvas'),
+                simulationWrapper: document.getElementById('simulation-wrapper'),
+                timeDisplay: document.getElementById('time-display'),
+                playPauseBtn: document.getElementById('play-pause-btn'),
+                timeResetBtn: document.getElementById('time-reset-btn'),
+                timeScaleSlider: document.getElementById('time-scale-slider'),
+                infoBtn: document.getElementById('info-btn'),
+                resetBtn: document.getElementById('reset-btn'),
+                popupOverlay: document.getElementById('popup-overlay'),
+                popupBox: document.getElementById('popup-box'),
+                popupClose: document.getElementById('popup-close'),
+                popupMessage: document.getElementById('popup-message'),
+                angle1Hud: document.getElementById('angle1-hud'),
+                angle2Hud: document.getElementById('angle2-hud'),
+                vel1Hud: document.getElementById('vel1-hud'),
+                vel2Hud: document.getElementById('vel2-hud'),
+                m1Slider: document.getElementById('m1-slider'),
+                m1Label: document.getElementById('m1-label'),
+                l1Slider: document.getElementById('l1-slider'),
+                l1Label: document.getElementById('l1-label'),
+                m2Slider: document.getElementById('m2-slider'),
+                m2Label: document.getElementById('m2-label'),
+                l2Slider: document.getElementById('l2-slider'),
+                l2Label: document.getElementById('l2-label'),
+                lUnifiedSlider: document.getElementById('l-unified-slider'),
+                lUnifiedLabel: document.getElementById('l-unified-label'),
+                l1SliderContainer: document.getElementById('l1-slider-container'),
+                l2SliderContainer: document.getElementById('l2-slider-container'),
+                lUnifiedSliderContainer: document.getElementById('l-unified-slider-container'),
+                kSlider: document.getElementById('k-slider'),
+                kLabel: document.getElementById('k-label'),
+                gSlider: document.getElementById('g-slider'),
+                gLabel: document.getElementById('g-label'),
+                dampingSlider: document.getElementById('damping-slider'),
+                dampingLabel: document.getElementById('damping-label'),
+                simModeRadios: document.querySelectorAll('input[name="sim-mode"]'),
+                modesInfo: document.getElementById('modes-info'),
+                freq1Info: document.getElementById('freq1-info'),
+                freq2Info: document.getElementById('freq2-info'),
+                mode1Preview: document.getElementById('mode1-preview'),
+                mode2Preview: document.getElementById('mode2-preview'),
+                graphPanel: document.getElementById('graph-panel'),
+                positionGraphContainer: document.getElementById('position-graph-container'),
+                energyGraphContainer: document.getElementById('energy-graph-container'),
+                graphCanvas: document.getElementById('graph-canvas'),
+                graphCheckboxesContainer: document.getElementById('graph-checkboxes-container'),
+                energyGraphCanvas: document.getElementById('energy-graph-canvas'),
+                energyGraphCheckboxesContainer: document.getElementById('energy-graph-checkboxes-container'),
+                dataPopupOverlay: document.getElementById('data-popup-overlay'),
+                dataPopupBox: document.getElementById('data-popup-box'),
+                dataPopupClose: document.getElementById('data-popup-close'),
+                largeDataTableHead: document.getElementById('large-data-table-head'),
+                largeDataTableBody: document.getElementById('large-data-table-body'),
+                largeExportCsvBtn: document.getElementById('large-export-csv-btn'),
+                largeClearDataBtn: document.getElementById('large-clear-data-btn'),
+                addDataBtn: document.getElementById('add-data-btn'),
+                viewDataBtn: document.getElementById('view-data-btn'),
+                dataTableContainer: document.getElementById('data-table-container'),
+                dataTableHead: document.getElementById('data-table-head'),
+                dataTableBody: document.getElementById('data-table-body'),
+                toastNotification: document.getElementById('toast-notification'),
+            };
+
+            const ctx = dom.canvas.getContext('2d');
+            const graphCtx = dom.graphCanvas.getContext('2d');
+            const energyGraphCtx = dom.energyGraphCanvas.getContext('2d');
+            let animationFrameId;
+
+            const defaultState = {
+                m1: 1.0, l1: 1.0,
+                m2: 1.0, l2: 1.0,
+                k: 5.0, g: 9.8, damping: 0.0,
+                timeScale: 1.0,
+                simulationMode: 'real',
+            };
+
+            let state = {
+                ...JSON.parse(JSON.stringify(defaultState)),
+                isPlaying: false, time: 0, dt: 1 / 120, // Higher precision timestep
+                theta1: 0, omega1: 0,
+                theta2: 0, omega2: 0,
+                isDragging: false, draggedPendulum: null,
+                graphData: { p1: { angles: [], visible: true }, p2: { angles: [], visible: true } },
+                energyGraphData: { total: [], kinetic: [], potential: [], individualK: {}, visible: { total: true, kinetic: true, potential: true } },
+                dataLog: [],
+            };
+            
+            const colors = ['#f87171', '#fb923c'];
+
+            function getPendulumCoords(pivot, length, angle, customScale = null) {
+                const scale = customScale || Math.min(dom.canvas.width / 3.5, dom.canvas.height * 0.7);
+                return {
+                    x: pivot.x + length * scale * Math.sin(angle),
+                    y: pivot.y + length * scale * Math.cos(angle)
+                };
+            }
+
+            function getAngleFromPos(pivot, pos) {
+                const dx = pos.x - pivot.x;
+                const dy = pos.y - pivot.y;
+                return Math.atan2(dx, dy);
+            }
+            
+            function getMousePos(e, touchIndex = 0) {
+                const rect = dom.canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[touchIndex].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[touchIndex].clientY : e.clientY;
+                return { x: clientX - rect.left, y: clientY - rect.top };
+            }
+
+            function setupSimulation() {
+                calculateNormalModeFrequencies();
+                buildGraphCheckboxes();
+                buildEnergyGraphCheckboxes();
+            }
+
+            let w1_sq, w2_sq;
+            function calculateNormalModeFrequencies() {
+                 if (state.m1 === state.m2 && state.l1 === state.l2) {
+                    const m = state.m1;
+                    const l = state.l1;
+                    w1_sq = state.g / l;
+                    w2_sq = (state.g / l) + (2 * state.k / m);
+                    dom.modesInfo.classList.remove('hidden');
+                    dom.freq1Info.textContent = Math.sqrt(w1_sq).toFixed(2);
+                    dom.freq2Info.textContent = Math.sqrt(w2_sq).toFixed(2);
+                 } else {
+                    dom.modesInfo.classList.add('hidden');
+                 }
+            }
+            
+            function equationsOfMotion(y) {
+                const [th1, om1, th2, om2] = y;
+                // Using small angle approximation sin(theta) ~ theta
+                const acc1 = (-state.g / state.l1) * th1 - (state.k / state.m1) * (th1 - th2);
+                const acc2 = (-state.g / state.l2) * th2 - (state.k / state.m2) * (th2 - th1);
+                return [om1, acc1, om2, acc2];
+            }
+
+            function rungeKutta4(y, dt) {
+                const k1 = equationsOfMotion(y);
+                const k2 = equationsOfMotion(y.map((v, i) => v + 0.5 * dt * k1[i]));
+                const k3 = equationsOfMotion(y.map((v, i) => v + 0.5 * dt * k2[i]));
+                const k4 = equationsOfMotion(y.map((v, i) => v + dt * k3[i]));
+                return y.map((v, i) => v + (dt / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
+            }
+
+            function updatePhysics(dt_scaled) {
+                 if (state.simulationMode === 'real') {
+                    let y = [state.theta1, state.omega1, state.theta2, state.omega2];
+                    y = rungeKutta4(y, dt_scaled);
+                    [state.theta1, state.omega1, state.theta2, state.omega2] = y;
+                    
+                    state.omega1 *= (1 - state.damping * dt_scaled);
+                    state.omega2 *= (1 - state.damping * dt_scaled);
+                } else if (state.m1 === state.m2 && state.l1 === state.l2) {
+                     const A = 0.3; 
+                     if(state.simulationMode === 'mode1') {
+                        const w = Math.sqrt(w1_sq);
+                        state.theta1 = A * Math.cos(w * state.time);
+                        state.omega1 = -A * w * Math.sin(w * state.time);
+                        state.theta2 = A * Math.cos(w * state.time);
+                        state.omega2 = -A * w * Math.sin(w * state.time);
+                     } else { // mode2
+                        const w = Math.sqrt(w2_sq);
+                        state.theta1 = A * Math.cos(w * state.time);
+                        state.omega1 = -A * w * Math.sin(w * state.time);
+                        state.theta2 = -A * Math.cos(w * state.time);
+                        state.omega2 = A * w * Math.sin(w * state.time);
+                     }
+                }
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
+                const w = dom.canvas.width;
+                const h = dom.canvas.height;
+
+                const pivotY = h * 0.1; 
+                const pivot1 = { x: w * 0.3, y: pivotY };
+                const pivot2 = { x: w * 0.7, y: pivotY };
+                
+                const p1 = getPendulumCoords(pivot1, state.l1, state.theta1);
+                const p2 = getPendulumCoords(pivot2, state.l2, state.theta2);
+
+                const m1_radius = 8 + state.m1 * 2;
+                const m2_radius = 8 + state.m2 * 2;
+
+                // Draw ceiling
+                const ceilGradient = ctx.createLinearGradient(0, pivotY - 5, 0, pivotY);
+                ceilGradient.addColorStop(0, '#64748b');
+                ceilGradient.addColorStop(1, '#334155');
+                ctx.fillStyle = ceilGradient;
+                ctx.fillRect(0, 0, w, pivotY);
+                ctx.strokeStyle = '#94a3b8';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, pivotY);
+                ctx.lineTo(w, pivotY);
+                ctx.stroke();
+
+                // Draw pendulum 1
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.beginPath();
+                ctx.moveTo(pivot1.x, pivot1.y);
+                ctx.lineTo(p1.x, p1.y);
+                ctx.stroke();
+                const p1Grad = ctx.createRadialGradient(p1.x - m1_radius*0.3, p1.y - m1_radius*0.3, m1_radius*0.1, p1.x, p1.y, m1_radius);
+                p1Grad.addColorStop(0, '#fca5a5');
+                p1Grad.addColorStop(1, colors[0]);
+                ctx.beginPath();
+                ctx.arc(p1.x, p1.y, m1_radius, 0, 2 * Math.PI);
+                ctx.fillStyle = p1Grad;
+                ctx.fill();
+
+                // Draw pendulum 2
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.beginPath();
+                ctx.moveTo(pivot2.x, pivot2.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+                const p2Grad = ctx.createRadialGradient(p2.x - m2_radius*0.3, p2.y - m2_radius*0.3, m2_radius*0.1, p2.x, p2.y, m2_radius);
+                p2Grad.addColorStop(0, '#fdba74');
+                p2Grad.addColorStop(1, colors[1]);
+                ctx.beginPath();
+                ctx.arc(p2.x, p2.y, m2_radius, 0, 2 * Math.PI);
+                ctx.fillStyle = p2Grad;
+                ctx.fill();
+
+                // Draw spring
+                drawSpring(ctx, p1, p2, 20, 6, state.k);
+            }
+            
+            function drawSpring(ctx, p1, p2, segments, width, k) {
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 1 || k === 0) return;
+
+                const nx = dx / dist;
+                const ny = dy / dist;
+
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.lineWidth = 1 + Math.min(2, k / 10);
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+
+                for (let i = 1; i < segments; i++) {
+                    const progress = i / segments;
+                    const sign = (i % 2 === 0) ? 1 : -1;
+                    const px = p1.x + dx * progress - sign * width * ny;
+                    const py = p1.y + dy * progress + sign * width * nx;
+                    ctx.lineTo(px, py);
+                }
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+            }
+
+            function drawGraph() {
+                graphCtx.clearRect(0, 0, dom.graphCanvas.width, dom.graphCanvas.height); 
+                const w = dom.graphCanvas.width, h = dom.graphCanvas.height;
+                const padding = { top: 10, bottom: 20, left: 35, right: 10 };
+                const plotWidth = w - padding.left - padding.right;
+                const plotHeight = h - padding.top - padding.bottom;
+                
+                let maxVal = 0; 
+                if (state.graphData.p1.visible) [state.graphData.p1.angles].flat().forEach(val => maxVal = Math.max(maxVal, Math.abs(val)));
+                if (state.graphData.p2.visible) [state.graphData.p2.angles].flat().forEach(val => maxVal = Math.max(maxVal, Math.abs(val)));
+                
+                const rangeDeg = Math.max(5, maxVal * 1.1 * 180 / Math.PI);
+                const scaleY = plotHeight / (2 * rangeDeg);
+                
+                for (let p = 0; p < 2; p++) {
+                    const key = p === 0 ? 'p1' : 'p2';
+                    if (!state.graphData[key].visible) continue;
+                    const data = state.graphData[key].angles;
+                    if(!data || data.length < 2) continue;
+                    
+                    graphCtx.strokeStyle = colors[p];
+                    graphCtx.lineWidth = 1.5;
+                    graphCtx.beginPath();
+
+                    const pointsToDraw = Math.min(data.length, plotWidth);
+                    const startIndex = data.length - pointsToDraw;
+
+                    for (let i = 0; i < pointsToDraw; i++) {
+                        const point = data[startIndex + i];
+                        const screenX = padding.left + plotWidth - (pointsToDraw - 1 - i);
+                        const screenY = (h / 2) - (point * 180 / Math.PI) * scaleY;
+                        if (i === 0) graphCtx.moveTo(screenX, screenY);
+                        else graphCtx.lineTo(screenX, screenY);
+                    }
+                    graphCtx.stroke();
+                }
+
+                graphCtx.strokeStyle = '#64748b'; graphCtx.lineWidth = 1;
+                graphCtx.beginPath();
+                graphCtx.moveTo(padding.left, h / 2);
+                graphCtx.lineTo(w - padding.right, h / 2);
+                graphCtx.stroke();
+                
+                graphCtx.fillStyle = '#94a3b8'; graphCtx.font = '10px Inter';
+                graphCtx.fillText(rangeDeg.toFixed(0) + '°', 5, padding.top + 3);
+                graphCtx.fillText('-' + rangeDeg.toFixed(0) + '°', 0, h - padding.bottom + 3);
+            }
+
+            function drawEnergyGraph() {
+                 energyGraphCtx.clearRect(0, 0, dom.energyGraphCanvas.width, dom.energyGraphCanvas.height);
+                if (!state.energyGraphData || state.energyGraphData.total.length < 2) return;
+
+                const w = dom.energyGraphCanvas.width, h = dom.energyGraphCanvas.height;
+                const padding = { top: 10, bottom: 20, left: 35, right: 10 };
+                const plotWidth = w - padding.left - padding.right;
+                const plotHeight = h - padding.top - padding.bottom;
+                
+                let maxE = 0; 
+                if(state.energyGraphData.total.length > 0) maxE = Math.max(...state.energyGraphData.total);
+                maxE = Math.max(0.001, maxE);
+                const scaleY = plotHeight / maxE;
+                
+                ['kinetic', 'potential', 'total'].forEach(key => {
+                     if (!state.energyGraphData.visible[key]) return;
+                     const data = state.energyGraphData[key];
+                     let color = '#fff';
+                     if(key === 'kinetic') color = colors[1];
+                     if(key === 'potential') color = colors[0];
+                     
+                     energyGraphCtx.strokeStyle = color;
+                     energyGraphCtx.lineWidth = (key === 'total' ? 2 : 1.5);
+                     energyGraphCtx.beginPath();
+                     for (let j = 0; j < data.length; j++) {
+                        const screenX = padding.left + (j / (data.length - 1)) * plotWidth;
+                        const screenY = h - padding.bottom - data[j] * scaleY;
+                        if (j === 0) energyGraphCtx.moveTo(screenX, screenY);
+                        else energyGraphCtx.lineTo(screenX, screenY);
+                    }
+                    energyGraphCtx.stroke();
+                });
+                
+                energyGraphCtx.strokeStyle = '#64748b'; energyGraphCtx.lineWidth = 1;
+                energyGraphCtx.beginPath();
+                energyGraphCtx.moveTo(padding.left, padding.top);
+                energyGraphCtx.lineTo(padding.left, h - padding.bottom);
+                energyGraphCtx.lineTo(w - padding.right, h - padding.bottom);
+                energyGraphCtx.stroke();
+                
+                energyGraphCtx.fillStyle = '#94a3b8'; energyGraphCtx.font = '10px Inter';
+                const maxLabel = (maxE > 1000 || (maxE < 0.01 && maxE > 0)) ? maxE.toExponential(1) : maxE.toFixed(2);
+                energyGraphCtx.fillText(maxLabel + ' J', 0, padding.top + 3);
+                energyGraphCtx.fillText('0 J', 0, h - padding.bottom);
+            }
+
+            function animateModePreviews() {
+                if(!dom.modesInfo.classList.contains('hidden')) {
+                    const time = performance.now() / 1000;
+                    drawModePreview(dom.mode1Preview, 1, time);
+                    drawModePreview(dom.mode2Preview, 2, time);
+                }
+            }
+
+            function drawModePreview(canvas, mode, time) {
+                if (!canvas) return;
+                const c = canvas.getContext('2d');
+                const w = canvas.width;
+                const h = canvas.height;
+                c.clearRect(0, 0, w, h);
+
+                const pivotY = h * 0.1;
+                const pivot1 = { x: w * 0.3, y: pivotY };
+                const pivot2 = { x: w * 0.7, y: pivotY };
+                
+                const A = 0.4;
+                let th1 = 0, th2 = 0;
+
+                if (mode === 1) {
+                    th1 = A * Math.cos(Math.sqrt(w1_sq) * time);
+                    th2 = th1;
+                } else {
+                    th1 = A * Math.cos(Math.sqrt(w2_sq) * time);
+                    th2 = -th1;
+                }
+
+                const p1 = getPendulumCoords(pivot1, 1.0, th1, h*0.7);
+                const p2 = getPendulumCoords(pivot2, 1.0, th2, h*0.7);
+
+                c.strokeStyle = '#94a3b8';
+                c.lineWidth = 1;
+                c.beginPath();
+                c.moveTo(pivot1.x, pivot1.y);
+                c.lineTo(p1.x, p1.y);
+                c.stroke();
+                 c.beginPath();
+                c.moveTo(pivot2.x, pivot2.y);
+                c.lineTo(p2.x, p2.y);
+                c.stroke();
+
+                c.beginPath();
+                c.arc(p1.x, p1.y, 3, 0, 2*Math.PI);
+                c.fillStyle = colors[0];
+                c.fill();
+                c.beginPath();
+                c.arc(p2.x, p2.y, 3, 0, 2*Math.PI);
+                c.fillStyle = colors[1];
+                c.fill();
+            }
+            
+            function gameLoop() {
+                if (state.isPlaying) {
+                    const dt_scaled = state.dt * state.timeScale;
+                    state.time += dt_scaled;
+                    updatePhysics(dt_scaled);
+                    
+                    const maxGraphPoints = 1500; 
+                    state.graphData.p1.angles.push(state.theta1);
+                    state.graphData.p2.angles.push(state.theta2);
+                    if (state.graphData.p1.angles.length > maxGraphPoints) {
+                        state.graphData.p1.angles.shift();
+                        state.graphData.p2.angles.shift();
+                    }
+                    
+                    const energies = calculateEnergies();
+                    state.energyGraphData.total.push(energies.total);
+                    state.energyGraphData.potential.push(energies.potential);
+                    state.energyGraphData.kinetic.push(energies.kinetic);
+                    
+                    if (state.energyGraphData.total.length > 300) {
+                        state.energyGraphData.total.shift();
+                        state.energyGraphData.potential.shift();
+                        state.energyGraphData.kinetic.shift();
+                    }
+                }
+                
+                dom.timeDisplay.textContent = state.time.toFixed(2) + ' s';
+                dom.angle1Hud.textContent = (state.theta1 * 180 / Math.PI).toFixed(2) + '°';
+                dom.vel1Hud.textContent = (state.omega1 * state.l1).toFixed(2) + ' m/s';
+                dom.angle2Hud.textContent = (state.theta2 * 180 / Math.PI).toFixed(2) + '°';
+                dom.vel2Hud.textContent = (state.omega2 * state.l2).toFixed(2) + ' m/s';
+                draw();
+                animateModePreviews();
+                drawGraph();
+                drawEnergyGraph();
+                
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+
+            function calculateEnergies() {
+                const scale = Math.min(dom.canvas.width / 3.5, dom.canvas.height * 0.7);
+                const h1 = state.l1 * scale * (1 - Math.cos(state.theta1));
+                const h2 = state.l2 * scale * (1 - Math.cos(state.theta2));
+                
+                const Ug1 = state.m1 * state.g * h1;
+                const Ug2 = state.m2 * state.g * h2;
+
+                const v1 = state.omega1 * state.l1 * scale;
+                const v2 = state.omega2 * state.l2 * scale;
+                const K1 = 0.5 * state.m1 * v1 * v1;
+                const K2 = 0.5 * state.m2 * v2 * v2;
+                
+                const w = dom.canvas.width;
+                const h = dom.canvas.height;
+                const pivotY = h * 0.05;
+                const pivot1 = { x: w * 0.3, y: pivotY };
+                const pivot2 = { x: w * 0.7, y: pivotY };
+
+                const x1_pos = pivot1.x + state.l1 * scale * Math.sin(state.theta1);
+                const x2_pos = pivot2.x + state.l2 * scale * Math.sin(state.theta2);
+                const Us = 0.5 * state.k * Math.pow(x2_pos - x1_pos, 2);
+
+                const kinetic = K1 + K2;
+                const potential = Ug1 + Ug2 + Us;
+                return { kinetic, potential, total: kinetic + potential, individualK: [K1, K2] };
+            }
+
+            function handleDragStart(e) {
+                if (e.type === 'touchstart') e.preventDefault();
+                const pos = getMousePos(e);
+                
+                const w = dom.canvas.width;
+                const h = dom.canvas.height;
+                const pivot1 = { x: w * 0.3, y: h * 0.1 };
+                const pivot2 = { x: w * 0.7, y: h * 0.1 };
+                const p1 = getPendulumCoords(pivot1, state.l1, state.theta1);
+                const p2 = getPendulumCoords(pivot2, state.l2, state.theta2);
+                const m1_radius = 8 + state.m1 * 2;
+                const m2_radius = 8 + state.m2 * 2;
+
+                if (Math.hypot(pos.x - p1.x, pos.y - p1.y) < m1_radius * 2) {
+                    state.isDragging = true;
+                    state.draggedPendulum = 1;
+                } else if (Math.hypot(pos.x - p2.x, pos.y - p2.y) < m2_radius * 2) {
+                    state.isDragging = true;
+                    state.draggedPendulum = 2;
+                }
+            }
+
+            function handleDragMove(e) {
+                if (!state.isDragging) return;
+                if (e.type === 'touchmove') e.preventDefault();
+                
+                const pos = getMousePos(e);
+                const w = dom.canvas.width;
+                const h = dom.canvas.height;
+
+                if (state.draggedPendulum === 1) {
+                    const pivot1 = { x: w * 0.3, y: h * 0.1 };
+                    state.theta1 = getAngleFromPos(pivot1, pos);
+                    state.omega1 = 0;
+                } else if (state.draggedPendulum === 2) {
+                    const pivot2 = { x: w * 0.7, y: h * 0.1 };
+                    state.theta2 = getAngleFromPos(pivot2, pos);
+                    state.omega2 = 0;
+                }
+            }
+
+            function handleDragEnd() {
+                state.isDragging = false;
+                state.draggedPendulum = null;
+            }
+
+            function resetToDefaults() {
+                if (state.isPlaying) togglePlayPause();
+                
+                const oldDt = state.dt;
+                state = {
+                    ...JSON.parse(JSON.stringify(defaultState)),
+                    dt: oldDt,
+                    isPlaying: false, time: 0, 
+                    theta1: 0, omega1: 0, theta2: 0, omega2: 0,
+                    isDragging: false, draggedPendulum: null,
+                    graphData: { p1: { angles: [], visible: true }, p2: { angles: [], visible: true } },
+                    energyGraphData: { total: [], kinetic: [], potential: [], individualK: {}, visible: { total: true, kinetic: true, potential: true } },
+                    dataLog: [],
+                };
+
+                // Update UI elements
+                ['m1', 'l1', 'm2', 'l2', 'k', 'g', 'damping'].forEach(id => {
+                    const slider = dom[`${id}Slider`] || dom[`lUnifiedSlider`];
+                    const label = dom[`${id}Label`] || dom[`lUnifiedLabel`];
+                    slider.value = state[id] || state.l1;
+                    label.textContent = (state[id] || state.l1).toFixed(1);
+                });
+
+                dom.timeScaleSlider.value = state.timeScale;
+                document.querySelector('input[name="sim-mode"][value="real"]').checked = true;
+                handleSimModeChange();
+                setupSimulation();
+            }
+
+            function handleSliderInput(e) {
+                const id = e.target.id.replace('-slider', '');
+                let value = parseFloat(e.target.value);
+                
+                if(state.simulationMode !== 'real' && (id === 'l1' || id === 'l2' || id === 'lUnified')) {
+                    state.l1 = value;
+                    state.l2 = value;
+                    dom.l1Slider.value = value;
+                    dom.l2Slider.value = value;
+                    dom.lUnifiedSlider.value = value;
+                    dom.l1Label.textContent = value.toFixed(1);
+                    dom.l2Label.textContent = value.toFixed(1);
+                    dom.lUnifiedLabel.textContent = value.toFixed(1);
+                } else if (state.simulationMode !== 'real' && (id === 'm1' || id === 'm2')) {
+                    state.m1 = value;
+                    state.m2 = value;
+                    dom.m1Slider.value = value;
+                    dom.m2Slider.value = value;
+                    dom.m1Label.textContent = value.toFixed(1);
+                    dom.m2Label.textContent = value.toFixed(1);
+                }
+                else {
+                    state[id] = value;
+                    dom[`${id}Label`].textContent = value.toFixed(1);
+                }
+
+                setupSimulation();
+            }
+             
+            function togglePlayPause() {
+                state.isPlaying = !state.isPlaying;
+                dom.playPauseBtn.textContent = state.isPlaying ? 'Pausa' : 'Play';
+            }
+            
+            function buildGraphCheckboxes() {
+                dom.graphCheckboxesContainer.innerHTML = '';
+                [
+                    { key: 'p1', label: 'Péndulo 1', color: colors[0] },
+                    { key: 'p2', label: 'Péndulo 2', color: colors[1] }
+                ].forEach(item => {
+                    const label = document.createElement('label');
+                    label.className = 'checkbox-label text-xs';
+                    label.innerHTML = `
+                        <input type="checkbox" value="${item.key}" ${state.graphData[item.key].visible ? 'checked' : ''}>
+                        <span class="checkmark"></span>
+                        <span style="color:${item.color}; margin-left:8px;">${item.label}</span>`;
+                    label.querySelector('input').addEventListener('change', (e) => {
+                        state.graphData[e.target.value].visible = e.target.checked;
+                    });
+                    dom.graphCheckboxesContainer.appendChild(label);
+                });
+            }
+
+            function buildEnergyGraphCheckboxes() {
+                dom.energyGraphCheckboxesContainer.innerHTML = '';
+                [
+                    { key: 'kinetic', label: 'K Total', color: '#fb923c' },
+                    { key: 'potential', label: 'U Total', color: '#60a5fa' },
+                    { key: 'total', label: 'E Total', color: 'white' },
+                    { key: 'k1', label: 'K₁', color: colors[0]},
+                    { key: 'k2', label: 'K₂', color: colors[1]}
+                ].forEach(item => {
+                     const label = document.createElement('label');
+                    label.className = 'checkbox-label text-xs';
+                    label.innerHTML = `
+                        <input type="checkbox" value="${item.key}" ${state.energyGraphData.visible[item.key] !== false ? 'checked' : ''}>
+                        <span class="checkmark"></span>
+                        <span style="color:${item.color}; margin-left:8px;">${item.label}</span>`;
+                    label.querySelector('input').addEventListener('change', (e) => {
+                        state.energyGraphData.visible[e.target.value] = e.target.checked;
+                    });
+                    dom.energyGraphCheckboxesContainer.appendChild(label);
+                });
+            }
+
+            function resizeCanvas() {
+                const container = dom.simulationWrapper;
+                let newWidth = container.clientWidth;
+                if (newWidth === 0) newWidth = Math.max(300, window.innerWidth * 0.55);
+                
+                dom.canvas.width = newWidth;
+                dom.canvas.height = newWidth / 1.6; 
+                
+                dom.graphCanvas.width = dom.graphCanvas.clientWidth;
+                dom.graphCanvas.height = dom.graphCanvas.clientHeight;
+                dom.energyGraphCanvas.width = dom.energyGraphCanvas.clientWidth;
+                dom.energyGraphCanvas.height = dom.energyGraphCanvas.clientHeight;
+                
+                setupSimulation();
+                draw();
+            }
+            
+             function showInfoPopup() {
+                dom.popupMessage.innerHTML = `
+                    <p>Este simulador explora el fascinante fenómeno de los <strong>péndulos acoplados</strong>, un sistema fundamental para entender las oscilaciones, la transferencia de energía y los modos normales de vibración.</p>
+                    <h5 class="font-bold mt-4 text-sky-400">Conceptos Clave</h5>
+                    <ul class="list-disc list-inside space-y-2 mt-2">
+                        <li><strong>Acoplamiento y Transferencia de Energía:</strong> Cuando un péndulo se pone a oscilar, transfiere su energía al otro a través del muelle. Esto causa un intercambio continuo, donde las amplitudes de oscilación de uno disminuyen mientras las del otro aumentan, y viceversa. Este fenómeno se visualiza como <strong>batidos</strong> en la gráfica de ángulos.</li>
+                        <li><strong>Modos Normales de Vibración:</strong> El movimiento complejo del sistema se puede descomponer en dos patrones de oscilación simples. Solo son puros cuando los péndulos son idénticos ($m_1=m_2$, $l_1=l_2$).</li>
+                        <li><strong>Modo 1 (En Fase):</strong> Los dos péndulos oscilan al unísono, en la misma dirección y sentido, como si el muelle no existiera. Su frecuencia es $\\omega_1 = \\sqrt{g/l}$.</li>
+                        <li><strong>Modo 2 (En Oposición de Fase):</strong> Los péndulos oscilan en direcciones opuestas. El muelle se comprime y estira activamente. Su frecuencia es mayor: $\\omega_2 = \\sqrt{g/l + 2k/m}$.</li>
+                    </ul>
+                    <h5 class="font-bold mt-4 text-sky-400">Cómo Usar la Simulación</h5>
+                     <ul class="list-disc list-inside space-y-2 mt-2">
+                        <li><strong>Arrastra y Suelta:</strong> En el modo 'Movimiento Real', haz clic y arrastra uno de los péndulos para darle una amplitud inicial y observa cómo la energía se transfiere al otro.</li>
+                        <li><strong>Explora los Modos:</strong> Selecciona 'Modo 1' o 'Modo 2' para ver los patrones de vibración puros. La simulación igualará los péndulos para que el modo sea perfecto.</li>
+                        <li><strong>Analiza las Gráficas:</strong> Las gráficas de ángulo y energía te permiten visualizar cuantitativamente la transferencia de energía y el fenómeno de los batidos.</li>
+                    </ul>
+                `;
+                dom.popupOverlay.classList.remove('hidden');
+                dom.popupBox.classList.remove('hidden');
+                setTimeout(() => {
+                    dom.popupOverlay.classList.remove('opacity-0');
+                    dom.popupBox.classList.remove('opacity-0');
+                    if (window.MathJax) {
+                        MathJax.typeset();
+                    }
+                }, 10);
+            }
+
+            function handleSimModeChange(e) {
+                 if(e) state.simulationMode = e.target.value;
+                 else state.simulationMode = document.querySelector('input[name="sim-mode"]:checked').value;
+                
+                if(state.simulationMode !== 'real') {
+                    dom.l1SliderContainer.classList.add('hidden');
+                    dom.l2SliderContainer.classList.add('hidden');
+                    dom.lUnifiedSliderContainer.classList.remove('hidden');
+                    if (state.m1 !== state.m2 || state.l1 !== state.l2) {
+                        showToast("Péndulos igualados para visualizar el modo normal puro.");
+                        state.m2 = state.m1;
+                        state.l2 = state.l1;
+                        dom.m2Slider.value = state.m1;
+                        dom.lUnifiedSlider.value = state.l1;
+                        dom.m2Label.textContent = state.m1.toFixed(1);
+                        dom.lUnifiedLabel.textContent = state.l1.toFixed(1);
+                        setupSimulation();
+                    }
+                } else {
+                    dom.l1SliderContainer.classList.remove('hidden');
+                    dom.l2SliderContainer.classList.remove('hidden');
+                    dom.lUnifiedSliderContainer.classList.add('hidden');
+                }
+            }
+             
+            function addDataToLog() {
+                dom.dataTableContainer.classList.remove('hidden');
+                const energies = calculateEnergies();
+                const snapshot = {
+                    time: state.time, 
+                    theta1: state.theta1 * 180 / Math.PI,
+                    omega1: state.omega1 * 180 / Math.PI,
+                    theta2: state.theta2 * 180 / Math.PI,
+                    omega2: state.omega2 * 180 / Math.PI,
+                    kineticEnergy: energies.kinetic, 
+                    potentialEnergy: energies.potential,
+                    totalEnergy: energies.total
+                };
+                state.dataLog.push(snapshot);
+                renderDataLog();
+            }
+
+            function renderDataLog(isLarge = false) {
+                const tableHead = isLarge ? dom.largeDataTableHead : dom.dataTableHead;
+                const tableBody = isLarge ? dom.largeDataTableBody : dom.dataTableBody;
+                
+                if (state.dataLog.length === 0) {
+                    tableHead.innerHTML = ''; tableBody.innerHTML = ''; 
+                     if(!isLarge) dom.dataTableContainer.classList.add('hidden');
+                    return; 
+                }
+                
+                let headers = isLarge 
+                    ? `<th>Tiempo (s)</th><th>θ1 (°)</th><th>ω1 (°/s)</th><th>θ2 (°)</th><th>ω2 (°/s)</th><th>K (J)</th><th>U (J)</th><th>T (J)</th>` 
+                    : `<th>T</th><th>θ1</th><th>ω1</th><th>θ2</th><th>ω2</th><th>K</th><th>U</th><th>E</th>`;
+                tableHead.innerHTML = `<tr>${headers}</tr>`;
+                
+                const logsToRender = isLarge ? state.dataLog : state.dataLog.slice(-5);
+
+                tableBody.innerHTML = logsToRender.map(log => `
+                    <tr>
+                        <td>${log.time.toFixed(2)}</td>
+                        <td>${log.theta1.toFixed(2)}</td>
+                        <td>${log.omega1.toFixed(2)}</td>
+                        <td>${log.theta2.toFixed(2)}</td>
+                        <td>${log.omega2.toFixed(2)}</td>
+                        <td>${log.kineticEnergy.toExponential(2)}</td>
+                        <td>${log.potentialEnergy.toExponential(2)}</td>
+                        <td>${log.totalEnergy.toExponential(2)}</td>
+                    </tr>
+                `).join('');
+            }
+
+            function exportDataToCsv() {
+                if (state.dataLog.length === 0) return;
+                let headers = "Tiempo (s),Angulo 1 (°),Velocidad Ang. 1 (°/s),Angulo 2 (°),Velocidad Ang. 2 (°/s),Energia Cinetica (J),Energia Potencial (J),Energia Total (J)\n";
+                
+                const csvContent = state.dataLog.map(log => {
+                    return [
+                        log.time.toFixed(3),
+                        log.theta1.toFixed(4),
+                        log.omega1.toFixed(4),
+                        log.theta2.toFixed(4),
+                        log.omega2.toFixed(4),
+                        log.kineticEnergy.toExponential(4),
+                        log.potentialEnergy.toExponential(4),
+                        log.totalEnergy.toExponential(4)
+                    ].join(',');
+                }).join('\n');
+                
+                const blob = new Blob([headers + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'datos_pendulos_acoplados.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+             function clearData() {
+                state.dataLog = [];
+                renderDataLog();
+                renderDataLog(true);
+            }
+            
+            let toastTimeout;
+            function showToast(message) {
+                clearTimeout(toastTimeout);
+                dom.toastNotification.textContent = message;
+                dom.toastNotification.classList.remove('opacity-0');
+                toastTimeout = setTimeout(() => {
+                    dom.toastNotification.classList.add('opacity-0');
+                }, 3000);
+            }
+
+            function showDataPopup() {
+                renderDataLog(true);
+                dom.dataPopupOverlay.classList.remove('hidden');
+                dom.dataPopupBox.classList.remove('hidden');
+                setTimeout(() => { dom.dataPopupOverlay.classList.remove('opacity-0'); dom.dataPopupBox.classList.remove('opacity-0'); }, 10);
+            }
+            function hideDataPopup() {
+                dom.dataPopupOverlay.classList.add('opacity-0');
+                dom.dataPopupBox.classList.add('opacity-0');
+                setTimeout(() => { dom.dataPopupOverlay.classList.add('hidden'); dom.dataPopupBox.classList.add('hidden'); }, 300);
+            }
+
+            function init() {
+                // Main setup
+                resizeCanvas();
+                
+                // Event Listeners
+                window.addEventListener('resize', resizeCanvas);
+                dom.playPauseBtn.addEventListener('click', togglePlayPause);
+                dom.resetBtn.addEventListener('click', resetToDefaults);
+                dom.timeResetBtn.addEventListener('click', () => { 
+                    state.time = 0; 
+                    state.theta1 = 0; state.omega1 = 0; state.theta2 = 0; state.omega2 = 0;
+                    state.graphData = { p1: { angles: [], visible: true }, p2: { angles: [], visible: true } };
+                    state.energyGraphData = { total: [], potential: [], kinetic: [], individualK: {}, visible: { total: true, kinetic: true, potential: true } };
+                });
+                dom.timeScaleSlider.addEventListener('input', (e) => state.timeScale = parseFloat(e.target.value));
+                
+                ['m1', 'l1', 'm2', 'l2', 'k', 'g', 'damping'].forEach(id => {
+                    dom[`${id}Slider`].addEventListener('input', handleSliderInput);
+                });
+                 dom.lUnifiedSlider.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value);
+                    state.l1 = value;
+                    state.l2 = value;
+                    dom.lUnifiedLabel.textContent = value.toFixed(1);
+                    setupSimulation();
+                });
+                
+                dom.simModeRadios.forEach(radio => radio.addEventListener('change', handleSimModeChange));
+
+                dom.infoBtn.addEventListener('click', showInfoPopup);
+                dom.popupClose.addEventListener('click', () => { dom.popupOverlay.classList.add('opacity-0'); dom.popupBox.classList.add('opacity-0'); setTimeout(() => { dom.popupOverlay.classList.add('hidden'); dom.popupBox.classList.add('hidden'); }, 300); });
+                dom.popupOverlay.addEventListener('click', () => { dom.popupOverlay.classList.add('opacity-0'); dom.popupBox.classList.add('opacity-0'); setTimeout(() => { dom.popupOverlay.classList.add('hidden'); dom.popupBox.classList.add('hidden'); }, 300); });
+                
+                dom.canvas.addEventListener('mousedown', handleDragStart);
+                window.addEventListener('mousemove', handleDragMove);
+                window.addEventListener('mouseup', handleDragEnd);
+                dom.canvas.addEventListener('touchstart', handleDragStart, { passive: false });
+                window.addEventListener('touchmove', handleDragMove, { passive: false });
+                window.addEventListener('touchend', handleDragEnd);
+
+                dom.graphCheckboxesContainer.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                         state.graphData[e.target.value].visible = e.target.checked;
+                    }
+                });
+                 dom.energyGraphCheckboxesContainer.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        state.energyGraphData.visible[e.target.value] = e.target.checked;
+                    }
+                });
+
+                dom.addDataBtn.addEventListener('click', addDataToLog);
+                dom.viewDataBtn.addEventListener('click', showDataPopup);
+                dom.dataPopupClose.addEventListener('click', hideDataPopup);
+                dom.dataPopupOverlay.addEventListener('click', hideDataPopup);
+                dom.largeClearDataBtn.addEventListener('click', clearData);
+                dom.largeExportCsvBtn.addEventListener('click', exportDataToCsv);
+
+                gameLoop();
+            }
+            
+            init();
+        });
+    </script>
+</body>
+</html>
+
